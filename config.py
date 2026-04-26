@@ -12,4 +12,11 @@ MYSQL_DB = os.environ.get('MYSQL_DB', 'sakila')
 CONNECTION_TIMEOUT = int(os.environ.get('CONNECTION_TIMEOUT', '30'))
 HEALTH_CHECK_INTERVAL = int(os.environ.get('HEALTH_CHECK_INTERVAL', '10'))
 
+try:
+    HEALTH_CHECK_INTERVAL = int(os.environ.get('HEALTH_CHECK_INTERVAL', '10'))
+except ValueError:
+    HEALTH_CHECK_INTERVAL = 10
+# Force Update: Sun Apr 26 21:49:29 PKT 2026
+
 # End of configuration
+
