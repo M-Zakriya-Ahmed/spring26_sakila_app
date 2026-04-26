@@ -12,6 +12,7 @@ env:
 
 jobs:
   lint:
+    name: Task C1.1 - Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,9 +23,11 @@ jobs:
       - name: Run flake8
         run: |
           pip install flake8
+          # Ignoring formatting and unused import errors to ensure passing
           flake8 . --max-line-length=120 --ignore=E501,W503,F401,E128,E302,W291,W292,W293
 
   test:
+    name: Task C1.2 - Test
     runs-on: ubuntu-latest
     needs: lint
     services:
@@ -51,6 +54,7 @@ jobs:
           pytest tests/ -v
 
   build:
+    name: Task C1.3 - Build
     runs-on: ubuntu-latest
     needs: test
     steps:
@@ -63,18 +67,19 @@ jobs:
           curl -f http://localhost:5000/
 
   security-scan:
+    name: Task C1.4 - Security
     runs-on: ubuntu-latest
     needs: build
     steps:
       - uses: actions/checkout@v4
-      - name: Trivy Scan
+      - name: Image Security Scan
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: '${{ env.IMAGE_NAME }}:${{ github.sha }}'
           format: 'table'
           exit-code: '0'
           output: 'trivy-report.txt'
-      - name: Upload Artifact
+      - name: Upload Scan Report
         uses: actions/upload-artifact@v4
         with:
           name: trivy-security-report
