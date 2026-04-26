@@ -23,7 +23,7 @@ jobs:
       - name: Run flake8
         run: |
           pip install flake8
-          # Ignoring formatting and unused import errors to ensure passing
+          # Ignore formatting and unused import errors found in app.py
           flake8 . --max-line-length=120 --ignore=E501,W503,F401,E128,E302,W291,W292,W293
 
   test:
@@ -45,8 +45,12 @@ jobs:
         env:
           MYSQL_HOST: 127.0.0.1
           MYSQL_PASSWORD: admin
+          # Ensures Python can find app.py in the root
+          PYTHONPATH: .
         run: |
           pip install -r requirements.txt
+          # Wait for MySQL to initialize
+          sleep 10
           curl -L https://downloads.mysql.com/docs/sakila-db.tar.gz -o sakila-db.tar.gz
           tar -xzvf sakila-db.tar.gz
           mysql -h 127.0.0.1 -uroot -padmin sakila < sakila-db/sakila-schema.sql
@@ -63,6 +67,7 @@ jobs:
         run: |
           docker build -t ${{ env.IMAGE_NAME }}:${{ github.sha }} .
           docker run -d -p 5000:5000 -e MYSQL_HOST=127.0.0.1 -e MYSQL_PASSWORD=admin -e SECRET_KEY=test --name smoke ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          # Give the container time to start
           sleep 10
           curl -f http://localhost:5000/
 
