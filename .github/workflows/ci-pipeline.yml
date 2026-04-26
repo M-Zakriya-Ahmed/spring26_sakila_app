@@ -1,38 +1,25 @@
-name: CI Pipeline
+name: FINAL-CI-RUN
 
 on:
   push:
-    branches: [main, develop]
+    branches: ["*"]
   pull_request:
-    branches: [main]
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
-env:
-  PYTHON_VERSION: '3.9'
-  IMAGE_NAME: sakila-app
+    branches: ["*"]
 
 jobs:
   lint:
-    name: Code Quality Check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - name: Install flake8
-        run: pip install flake8
-      - name: Run flake8
-        # Guidelines: max-line 120, ignore E501, W503. 
-        # Added F401 to avoid the 'unused import' crash we saw earlier.
-        run: flake8 . --max-line-length=120 --ignore=E501,W503,F401
-
+          python-version: '3.9'
+      - name: Run lint
+        run: |
+          pip install flake8
+          flake8 . --max-line-length=120 --ignore=E501,W503,F401
   test:
-    name: Run Unit Tests
     runs-on: ubuntu-latest
     needs: lint
     services:
@@ -43,64 +30,49 @@ jobs:
           MYSQL_DATABASE: sakila
         ports:
           - 3306:3306
-        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+        options: --health-cmd="mysqladmin ping" --health-interval=10s
     env:
       MYSQL_HOST: 127.0.0.1
       MYSQL_USER: root
       MYSQL_PASSWORD: admin
       MYSQL_DB: sakila
-      SECRET_KEY: ci-test-key
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-      - name: Import Sakila DB (Challenge Element)
+      - name: Setup & Test
         run: |
+          pip install -r requirements.txt
           curl -L https://downloads.mysql.com/docs/sakila-db.tar.gz -o sakila-db.tar.gz
           tar -xzvf sakila-db.tar.gz
           mysql -h 127.0.0.1 -uroot -padmin sakila < sakila-db/sakila-schema.sql
           mysql -h 127.0.0.1 -uroot -padmin sakila < sakila-db/sakila-data.sql
-      - name: Run pytest
-        run: pytest tests/ -v
-
+          pytest tests/ -v
   build:
-    name: Docker Build & Verification
     runs-on: ubuntu-latest
     needs: test
     steps:
       - uses: actions/checkout@v4
-      - name: Build Image
+      - name: Docker Build
         run: |
-          docker build -t ${{ env.IMAGE_NAME }}:${{ github.sha }} .
+          docker build -t sakila-app:${{ github.sha }} .
           docker images
-      - name: Smoke Test
-        run: |
-          docker run -d -p 5000:5000 \
-            -e MYSQL_HOST=127.0.0.1 -e MYSQL_PASSWORD=admin -e SECRET_KEY=smoke \
-            --name smoke-test ${{ env.IMAGE_NAME }}:${{ github.sha }}
-          sleep 10
+          docker run -d -p 5000:5000 -e MYSQL_HOST=127.0.0.1 -e MYSQL_PASSWORD=admin -e SECRET_KEY=test --name smoke sakila-app:${{ github.sha }}
+          sleep 5
           curl -f http://localhost:5000/
-
   security-scan:
-    name: Image Security Scan
     runs-on: ubuntu-latest
     needs: build
     steps:
       - uses: actions/checkout@v4
-      - name: Build for Scan
-        run: docker build -t ${{ env.IMAGE_NAME }}:${{ github.sha }} .
+      - name: Build for scan
+        run: docker build -t sakila-app:${{ github.sha }} .
       - name: Run Trivy
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: '${{ env.IMAGE_NAME }}:${{ github.sha }}'
+          image-ref: 'sakila-app:${{ github.sha }}'
           format: 'table'
           exit-code: '0'
           output: 'trivy-report.txt'
-      - name: Upload Artifact
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: trivy-security-report
