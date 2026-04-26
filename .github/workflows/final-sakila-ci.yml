@@ -1,0 +1,69 @@
+name: Sakila-Final-CI
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint
+        run: |
+          pip install flake8
+          flake8 . --max-line-length=120 --ignore=E501,W503,F401,E128,E302,W291,W292,W293
+  test:
+    runs-on: ubuntu-latest
+    needs: lint
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: admin
+          MYSQL_DATABASE: sakila
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test
+        env:
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_USER: root
+          MYSQL_PASSWORD: admin
+          MYSQL_DB: sakila
+        run: |
+          pip install -r requirements.txt
+          curl -L https://downloads.mysql.com/docs/sakila-db.tar.gz -o sakila-db.tar.gz
+          tar -xzvf sakila-db.tar.gz
+          mysql -h 127.0.0.1 -uroot -padmin sakila < sakila-db/sakila-schema.sql
+          mysql -h 127.0.0.1 -uroot -padmin sakila < sakila-db/sakila-data.sql
+          pytest tests/ -v
+  build:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: |
+          docker build -t sakila-app:latest .
+          docker run -d -p 5000:5000 -e MYSQL_HOST=127.0.0.1 -e MYSQL_PASSWORD=admin -e SECRET_KEY=test --name smoke sakila-app:latest
+          sleep 5
+          curl -f http://localhost:5000/
+  security-scan:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'sakila-app:latest'
+          format: 'table'
+          exit-code: '0'
+          output: 'trivy-report.txt'
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-security-report
+          path: trivy-report.txt
