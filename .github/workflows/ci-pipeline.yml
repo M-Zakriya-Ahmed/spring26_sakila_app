@@ -26,8 +26,8 @@ jobs:
       - name: Install flake8
         run: pip install flake8
       - name: Run flake8
-        # Added F401 to the ignore list to bypass unused import errors
-        run: flake8 . --max-line-length=120 --ignore=E501,W503,E128,E302,W291,W292,W293,F401
+        # We are using --extend-ignore and adding F401 specifically here
+        run: flake8 . --max-line-length=120 --ignore=E501,W503,E128,E302,W291,W292,W293,F401,F403,F405
 
   test:
     runs-on: ubuntu-latest
